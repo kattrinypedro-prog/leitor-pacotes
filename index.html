@@ -1,0 +1,194 @@
+
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport"
+        content="width=device-width, initial-scale=1">
+
+  <title>Leitor de Pacotes</title>
+
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f5f5f5;
+      margin: 0;
+      padding: 16px;
+      text-align: center;
+    }
+
+    h2 { color: #ee4d2d; }
+
+    #reader {
+      max-width: 450px;
+      margin: 15px auto;
+      background: #222;
+      border-radius: 10px;
+      overflow: hidden;
+    }
+
+    button {
+      padding: 14px;
+      background: #ee4d2d;
+      color: white;
+      border: 0;
+      border-radius: 8px;
+      margin: 5px;
+      font-size: 16px;
+    }
+
+    #status {
+      background: white;
+      padding: 14px;
+      border-radius: 8px;
+      margin: 15px auto;
+      max-width: 450px;
+      overflow-wrap: anywhere;
+    }
+
+    #historico {
+      max-width: 450px;
+      margin: auto;
+      text-align: left;
+      overflow-wrap: anywhere;
+    }
+
+    .item {
+      padding: 10px;
+      margin: 5px 0;
+      background: white;
+      border-radius: 6px;
+    }
+  </style>
+</head>
+
+<body>
+  <h2>📦 Leitor de Pacotes</h2>
+  <p>Leitura contínua de QR Codes</p>
+
+  <button onclick="iniciar()">Abrir câmera</button>
+  <button onclick="parar()">Parar câmera</button>
+
+  <div id="reader"></div>
+
+  <div id="status">Aguardando câmera...</div>
+
+  <h3>Envios realizados: <span id="total">0</span></h3>
+
+  <div id="historico"></div>
+
+  <script>
+    // COLE A URL DO SEU APPS SCRIPT ABAIXO
+    const URL_SCRIPT = 'https://script.google.com/a/macros/shopee.com/s/AKfycbyPZribyxVSDWYpbDDe_K-AbTHfHKgDmc0FgUAqq_cwH_vy9RrKMMOnfBtc8qEYI8_1/exec';
+
+    let leitor = null;
+    let ativo = false;
+    let enviando = false;
+    let ultimoCodigo = '';
+    let ultimoHorario = 0;
+    let total = 0;
+
+    const status = document.getElementById('status');
+
+    function mensagem(texto) {
+      status.textContent = texto;
+    }
+
+    async function iniciar() {
+      if (ativo) return;
+
+      try {
+        if (typeof Html5Qrcode === 'undefined') {
+          throw new Error('Biblioteca QR não carregada');
+        }
+
+        leitor = new Html5Qrcode('reader');
+
+        await leitor.start(
+          { facingMode: 'environment' },
+          { fps: 10, qrbox: 250 },
+          processar,
+          () => {}
+        );
+
+        ativo = true;
+        mensagem('Câmera ativa. Aponte para o QR Code.');
+
+      } catch (erro) {
+        mensagem(
+          'Erro na câmera: ' +
+          (erro.message || String(erro))
+        );
+      }
+    }
+
+    async function parar() {
+      if (!leitor || !ativo) return;
+
+      await leitor.stop();
+      ativo = false;
+      mensagem('Câmera parada.');
+    }
+
+    async function processar(codigo) {
+      codigo = String(codigo || '').trim();
+
+      if (!codigo || enviando) return;
+
+      const agora = Date.now();
+
+      if (
+        codigo === ultimoCodigo &&
+        agora - ultimoHorario < 4000
+      ) return;
+
+      if (URL_SCRIPT === 'COLE_AQUI_SUA_URL_EXEC') {
+        mensagem('Configure a URL do Apps Script.');
+        return;
+      }
+
+      enviando = true;
+      ultimoCodigo = codigo;
+      ultimoHorario = agora;
+
+      mensagem('Enviando: ' + codigo);
+
+      try {
+        const dados = new URLSearchParams();
+        dados.append('codigo', codigo);
+
+        await fetch(URL_SCRIPT, {
+          method: 'POST',
+          mode: 'no-cors',
+          body: dados
+        });
+
+        total++;
+        document.getElementById('total').textContent = total;
+
+        mensagem(
+          'Envio solicitado: ' + codigo +
+          '. Confira a planilha.'
+        );
+
+        const item = document.createElement('div');
+        item.className = 'item';
+        item.textContent = '↗ ' + codigo;
+
+        document.getElementById('historico').prepend(item);
+
+      } catch (erro) {
+        mensagem(
+          'Falha de comunicação: ' +
+          (erro.message || String(erro))
+        );
+
+      } finally {
+        enviando = false;
+      }
+    }
+  </script>
+</body>
+</html>
